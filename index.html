@@ -144,6 +144,10 @@
       margin: 1rem;
       box-shadow: 3px 3px 8px rgba(0,0,0,0.15);
     }
+    .glyph-grid > h3.segment-header {
+      flex-basis: 100%;
+      margin: 1.5rem 1rem 0;
+    }
    </style>
 </head>
 <body>
@@ -151,7 +155,8 @@
 
   <h1 class="ui header">Adafruit GFX Pixel font customiser</h1>
   <p>
-    <em>Created by <a href="https://github.com/tchapi">tchapi</a>, major improvements by <a href="https://github.com/cmarrin">cmarrin</a> and <a href="https://github.com/charno">charno</a> - Source code available on <a href="https://github.com/tchapi/Adafruit-GFX-Font-Customiser">Github</a>.</em>
+    <em>Created by <a href="https://github.com/tchapi">tchapi</a>, major improvements by <a href="https://github.com/cmarrin">cmarrin</a> and <a href="https://github.com/charno">charno</a> - Source code available on <a href="https://github.com/tchapi/Adafruit-GFX-Font-Customiser">Github</a>.</em><br>
+    <em>Fork by <a href="https://github.com/honzaskypala">honza.skypala</a>, support for segmented fonts and for UTF8 extension.</em>
   </p>
 
   <div class="ui divider"></div>
@@ -174,8 +179,14 @@
     <div class="ui small modal choose">
       <div class="header">Add a new character</div>
       <div class="content">
-        <p>The character will be added to the set (<em>either at the end or at the beginning, depending on its code</em>), and if it is not contiguous with the previous set, <strong>the interval characters will be added too</strong>, but disabled, so that they do not take much space in the exported glyphs</p>
+        <p>The character is inserted at its place by code point. A character next to an existing range joins it; any other character starts a new <strong>segment</strong>. A font with several segments, or with characters above 0xFF, is exported as a segmented <kbd>UTF8_32BitFont[]</kbd>; otherwise as a plain <kbd>GFXfont</kbd>.</p>
         <form class="ui form">
+        <div class="field">
+          <div class="ui toggle checkbox fill-gap">
+            <input type="checkbox" name="fillgap" tabindex="0" class="hidden" checked="checked">
+            <label>Fill the gap to the nearest character with disabled characters (keeps one range, as a plain GFXfont needs)</label>
+          </div>
+        </div>
         <div class="field">
           <div class="ui toggle checkbox use-charcode">
             <input type="checkbox" name="charcode" tabindex="0" class="hidden">
@@ -184,13 +195,13 @@
         </div>
         </form>
         <div class="ui right labeled input">
-          <input type="text" id="new-character" placeholder="Character to add" maxlength="1">
+          <input type="text" id="new-character" placeholder="Character to add" maxlength="2">
           <a class="ui label">
             Char Code: <kbd class="charcode">N/A</kbd>
           </a>
         </div>
         <div class="ui right labeled input">
-          <input type="text" id="new-character-code" placeholder="Character code to add (hex)" maxlength="4">
+          <input type="text" id="new-character-code" placeholder="Character code to add (hex)" maxlength="6">
           <a class="ui label">
             Character: <kbd class="character">N/A</kbd>
           </a>
@@ -228,13 +239,13 @@
 
         </form>
         <div class="ui right labeled input">
-          <input type="text" id="newfont-new-character" placeholder="Character to add" maxlength="1">
+          <input type="text" id="newfont-new-character" placeholder="Character to add" maxlength="2">
           <a class="ui label">
             Char Code: <kbd class="newfontCharcode">N/A</kbd>
           </a>
         </div>
         <div class="ui right labeled input">
-          <input type="text" id="newfont-new-character-code" placeholder="Character code to add (hex)" maxlength="4">
+          <input type="text" id="newfont-new-character-code" placeholder="Character code to add (hex)" maxlength="6">
           <a class="ui label">
             Character: <kbd class="newfontCharacter">N/A</kbd>
           </a>
@@ -285,6 +296,7 @@
             </div>
           </div>
           <button class="ui button green" id="export" disabled="disabled"><i class="icon download"></i> Process and create file</button>
+          <span id="exportFormat" class="np"></span>
         </div>
       </div>
     </div>
@@ -303,7 +315,9 @@
           <li>Create a new font with a single character</li>
         </ul>
         <h5>Adding characters:</h5>
-        <p>You can easily add new characters to the font afterwards. Interval characters will be added automatically <em>as disabled glyphs</em>.</p>
+        <p>You can easily add new characters to the font afterwards, including Unicode characters above 0xFF. The gap to the nearest character can be filled <em>with disabled glyphs</em>; otherwise the character starts a new segment.</p>
+        <h5>Segmented UTF-8 fonts:</h5>
+        <p>Fonts declared as <kbd>UTF8_32BitFont[]</kbd> (an array of segments, each a <kbd>GFXfont</kbd> plus 32-bit <kbd>dFirst</kbd>/<kbd>dLast</kbd>, ended by a null entry) can be imported too. Only one font per file is edited.</p>
       </div>
     </div>
     <div class="eleven wide column">
@@ -315,7 +329,8 @@
           <li>Edit each pixel of the glyph</li>
           <li>Edit all values present in the GFXglyph data structure (See <a href="https://learn.adafruit.com/creating-custom-symbol-font-for-adafruit-gfx-library/understanding-the-font-specification">Adafruit documentation</a> for more information)</li>
         </ul>
-        <h5>When exporting, you can either :</h5>
+        <h5>When exporting:</h5>
+        <p>The format is chosen automatically: a plain <kbd>GFXfont</kbd> when the characters form one range within 0x00–0xFF, otherwise a segmented <kbd>UTF8_32BitFont[]</kbd> (one segment per range of consecutive characters). You can either:</p>
         <ul>
           <li>Select a range of characters to include in the output. Characters outside of this range will <strong>not</strong> be included in the bitmap nor in the glyphs table.</li>
           <li>Disable individual characters. The disabled characters get all values set to <kbd>0</kbd>. There still are entries for the disabled characters in the glyphs table, but no data in the bitmap for them — this keeps the characters in their correct places in the ASCII table.</li>
@@ -335,7 +350,67 @@
   </div>
   <div id="glyphs" class="ui glyph-grid"><em>Please open or create a font first.</em></div>
 </body>
+<script src="gfxfont.js"></script>
 <script>
+
+// Largest gap that "Fill the gap" fills with disabled glyphs
+const MAX_FILLED_GAP = 256
+
+// Character for a code point, '' when the value is not a valid code point
+function charFromCodePoint (cp) {
+  if (!Number.isInteger(cp) || cp < 0 || cp > 0x10FFFF) return ''
+  return String.fromCodePoint(cp)
+}
+
+// Code point as hex text, e.g. 0x41
+function hexCode (cp) {
+  return '0x' + cp.toString(16).toUpperCase()
+}
+
+// Glyph wrappers in #glyphs (sorted by code point)
+function glyphItems () {
+  return $('#glyphs').children('div').filter(function () { return $(this).find('.table.glyph').length > 0 })
+}
+
+function glyphCodePoint (item) {
+  return parseInt($(item).find('.table.glyph').attr('data-cp'))
+}
+
+// One header per run of consecutive code points (= one segment of a UTF8_32BitFont)
+function renderSegmentHeaders () {
+  $('#glyphs h3.segment-header').remove()
+  const items = glyphItems().toArray()
+  let runStart = 0
+  for (let i = 0; i <= items.length; i++) {
+    if (i < items.length && i > runStart && glyphCodePoint(items[i]) === glyphCodePoint(items[i - 1]) + 1) continue
+    if (i > runStart) {
+      const first = glyphCodePoint(items[runStart])
+      const last = glyphCodePoint(items[i - 1])
+      $(items[runStart]).before('<h3 class="ui dividing header segment-header">Segment ' + hexCode(first) + ' – ' + hexCode(last) + ' <span class="np">(' + (i - runStart) + ' glyphs)</span></h3>')
+    }
+    runStart = i
+  }
+}
+
+// Inserts a glyph wrapper at its place by code point
+function insertGlyphItem (item, cp) {
+  const next = glyphItems().filter(function () { return glyphCodePoint(this) > cp }).first()
+  if (next.length) next.before(item)
+  else $('#glyphs').append(item)
+}
+
+// Export range inputs follow the lowest/highest code point of the font
+function updateRangeInputs () {
+  const cps = glyphItems().toArray().map(glyphCodePoint)
+  if (cps.length === 0) return
+  $('#firstglyph').val(hexCode(Math.min(...cps)))
+  $('#lastglyph').val(hexCode(Math.max(...cps)))
+}
+
+function showMessage (text) {
+  $('.ui.modal.message p').text(text)
+  $('.ui.modal.message').modal('show')
+}
 
 function makeUpDownButton (name, func, color, width) {
   const button = $('<div class="ui mini compact buttons" style="margin:1px"></div>')
@@ -352,9 +427,10 @@ function makeCheckButton (name, func, color, width, disabled) {
 }
 
 function makeGlyphItem (n, w, h, char, adv, ow, oh, disabled) {
-  const charCode = char.charCodeAt(0)
+  const charCode = char.codePointAt(0)
   const table = $('<div class="table"></div>')
     .addClass('glyph')
+    .attr('data-cp', charCode)
     .attr('data-pixels', n)
     .attr('data-w', w)
     .attr('data-h', h)
@@ -530,98 +606,39 @@ function advanceLoading (percent) {
 }
 
 function extractFont () {
-  let data = $('#source').val()
-
-  const bitmaps_part_re = /const\ uint8\_t\ (.*)Bitmaps\[\]/
-  const glyph_part_re = /const\ GFXglyph/
-  const font_part_re = /const\ GFXfont([\s\S]*)/g
-
-  // Extract name
-  const font_name = data.match(bitmaps_part_re)
-
-  if (font_name != null && font_name.length > 1) {
-    window['name'] = font_name[1]
-  } else {
-    alert('No correct font file found (name missing), please paste the content of an Adafruit GFX font file first.')
+  let font
+  try {
+    font = GfxFont.parseFont($('#source').val())
+  } catch (e) {
     $("#loader").hide()
+    alert('No correct font file found (' + e.message + '), please paste the content of an Adafruit GFX font file first.')
     return
+  }
+
+  // Font-level data used by the export
+  window['font'] = {
+    preamble: font.preamble,
+    bitmapsName: font.bitmapsName,
+    glyphsName: font.glyphsName,
+    fontName: font.fontName,
+    yAdvance: font.yAdvance
   }
 
   $('#glyphs').empty()
-
-  // Extract GFXFont part
-  const font_def = data.match(font_part_re)
-  window['font_def'] = font_def[0]
-
-  // Ignore any lines before the font definition (like headers, for instance)
-  // In case the parts come out of order, cut the lines until the first of any
-  // of the parts we are interested in.
-  const slice_index = Math.min(
-    data.indexOf(font_name[0]),
-    data.indexOf(font_def[0]),
-    data.search(glyph_part_re),
-  )
-  window.font_preamble = data.slice(0, slice_index)
-  data = data.slice(slice_index)
-
-  // Get first, last and yOffset
-  let parts = font_def[0].split(',')
-  const number_hexa_re = /0[xX][0-9a-fA-F]+/gi
-  const number_dec_re = /[0-9]+/gi
-  if (parts[2].match(number_hexa_re)) {
-    window['first'] = parts[2].match(number_hexa_re)[0]
-  } else if (parts[2].match(number_dec_re)) {
-    window['first'] = '0x' + Number(parts[2].match(number_dec_re)[0]).toString(16)
-  } else {
-    alert('No correct font file found (first character offset unparsable), please paste the content of an Adafruit GFX font file first.')
-    $("#loader").hide()
-    return
-  }
-
-  if (parts[3].match(number_hexa_re)) {
-    window['last'] = parts[3].match(number_hexa_re)[0]
-  } else if (parts[3].match(number_dec_re)) {
-    window['last'] = '0x' + Number(parts[3].match(number_dec_re)[0]).toString(16)
-  } else {
-    alert('No correct font file found (last character offset unparsable), please paste the content of an Adafruit GFX font file first.')
-    $("#loader").hide()
-    return
-  }
-
-  data = data.replace(font_def[0], '')
-  data = data.replace(/\{/gi, '[').replace(/\}/gi, ']')
-  data = data.replace('const GFXglyph ', '').replace('const uint8_t ', '').replace(/\[\]\ PROGMEM/gi, '')
-
-  eval(data)
-
-  /*
-      // Tada 🎉
-      console.log(window["name"])
-      console.log(window["size"])
-      console.log(window["first"])
-      console.log(window["last"])
-      console.log(window["font_def"])
-      console.log(window[name + "Bitmaps"])
-      console.log(window[name + "Glyphs"])
-      */
-
-  $('.fontname').text('(' + window['name'].slice(0, window['name'].length - 1) + ')').show()
-  $('#firstglyph').val(window["first"])
-  $('#lastglyph').val(window["last"])
-
+  $('.fontname').text('(' + font.fontName + ')').show()
   $('#add').attr('disabled', false)
 
-  const glyphsArray = window[name + 'Glyphs']
+  const glyphsArray = font.glyphs
 
   // Run pre-calculations for correct display
   let maxW = 0
   let maxBaseline = 0
   let minUnderBaseline = 0
-  for (ind in glyphsArray) {
-    const inv_oh = -glyphsArray[ind][5]
-    maxW = Math.max(maxW, glyphsArray[ind][1], glyphsArray[ind][3])
+  for (const g of glyphsArray) {
+    const inv_oh = -g.yo
+    maxW = Math.max(maxW, g.w, g.adv)
     maxBaseline = Math.max(maxBaseline, inv_oh)
-    minUnderBaseline = Math.min(minUnderBaseline, inv_oh + 1 - glyphsArray[ind][2])
+    minUnderBaseline = Math.min(minUnderBaseline, inv_oh + 1 - g.h)
   }
 
   // Calculate the max height that we need for every glyph cell
@@ -635,51 +652,15 @@ function extractFont () {
   window['glyph_table_width'] = Math.max(160, maxW * 11 + 30 /* some margin */)
 
   // Display tables
-  for (ind in glyphsArray) {
-    const charIndex = parseInt(ind)
-    // for each glyph
-    const char = String.fromCharCode(parseInt(window['first'], 16) + charIndex)
-    const w = glyphsArray[ind][1]
-    const h = glyphsArray[ind][2]
-    const adv = glyphsArray[ind][3]
-    const ow = glyphsArray[ind][4]
-    const oh = glyphsArray[ind][5]
-    let n = ''
-
-    // extract data: current offset
-    currentOffset = glyphsArray[charIndex][0]
-
-    // extract data: next offset
-    if (charIndex + 1 < glyphsArray.length) {
-      // To get the next offset, we need to find the next non-disabled
-      // character offset (else, we will get 0 and it's not correct).
-      let nextIndexIncrementor = 1
-      do {
-        nextOffset = glyphsArray[charIndex + nextIndexIncrementor][0]
-        nextIndexIncrementor += 1
-      } while (nextOffset === 0 && (charIndex + nextIndexIncrementor < glyphsArray.length))
-      if (nextOffset === 0) { // We reached the end of the bitmaps
-        nextOffset = window[name + 'Bitmaps'].length
-      }
-    } else {
-      nextOffset = window[name + 'Bitmaps'].length
-    }
-    
-    let disabled = (w == 0 || h == 0) && adv == 0
-
-    if (!disabled) {
-      for (let k = 0; k < (nextOffset - currentOffset); k++) {
-        n += ('000000000' + window[name + 'Bitmaps'][currentOffset + k].toString(2)).substr(-8)
-      }
-    }
-
-    grid = makeGlyphItem (n, w, h, char, adv, ow, oh, disabled)
+  glyphsArray.forEach(function (g, charIndex) {
+    const grid = makeGlyphItem(g.pixels, g.w, g.h, String.fromCodePoint(g.cp), g.adv, g.xo, g.yo, g.disabled)
 
     function glyphAppendClosure(el, adv) {
       setTimeout(function () {
         advanceLoading(0.2 * adv)
         $('#glyphs').append(el)
         if (adv === 1) {
+          updateRangeInputs()
           // Run the setGlyphTable function now
           displayGlyphTable()
         }
@@ -687,8 +668,10 @@ function extractFont () {
     }
 
     glyphAppendClosure(grid, (charIndex + 1) / glyphsArray.length)
-  }
-  
+  })
+
+  if (font.warnings.length) showMessage(font.warnings.join(' '))
+
   $('#export').prop( "disabled", false )
   $('#reset').prop("disabled", false)
   $('#createFont').prop( "disabled", true )
@@ -704,6 +687,7 @@ function displayGlyphTable () {
         advanceLoading(0.2 + 0.8 * adv)
         setGlyphTable(el.children().find('.glyph'))
         if (adv === 1) {
+          renderSegmentHeaders()
           $('#loader').hide()
         }
       }, 1)
@@ -722,6 +706,7 @@ $(document).ready(function () {
   $('#export').attr('disabled', 'disabled')
   $('#reset').prop("disabled", 'disabled')
   $('.ui.checkbox.use-charcode').checkbox()
+  $('.ui.checkbox.fill-gap').checkbox()
 
   $(document).on('change', '.ui.checkbox.use-charcode input', function (e) {
     $('#new-character').parent().toggle()
@@ -731,13 +716,13 @@ $(document).ready(function () {
       if ($('#new-character-code').val() == '') {
         $('.character').text('N/A')
       } else {
-        $('.character').text(String.fromCharCode(parseInt($('#new-character-code').val(), 16)))
+        $('.character').text(charFromCodePoint(parseInt($('#new-character-code').val(), 16)))
       }
     } else {
       if ($('#new-character').val() == '') {
         $('.charcode').text('N/A')
       } else {
-        $('.charcode').text('0x' + $('#new-character').val().charCodeAt(0).toString(16).toUpperCase())
+        $('.charcode').text('0x' + $('#new-character').val().codePointAt(0).toString(16).toUpperCase())
       }
     }
   })
@@ -752,20 +737,19 @@ $(document).ready(function () {
       if ($('#newfont-new-character-code').val() == '') {
         $('.newfontCharacter').text('N/A')
       } else {
-        $('.newfontCharacter').text(String.fromCharCode(parseInt($('#newfont-new-character-code').val(), 16)))
+        $('.newfontCharacter').text(charFromCodePoint(parseInt($('#newfont-new-character-code').val(), 16)))
       }
     } else {
       if ($('#newfont-new-character').val() == '') {
         $('.newfontCharcode').text('N/A')
       } else {
-        $('.newfontCharcode').text('0x' + $('#newfont-new-character').val().charCodeAt(0).toString(16).toUpperCase())
+        $('.newfontCharcode').text('0x' + $('#newfont-new-character').val().codePointAt(0).toString(16).toUpperCase())
       }
     }
   })
 
   $('#loader').hide()
-  window['name'] = null
-  window['font_def'] = null
+  window['font'] = null
 
   $('#extract').click(function () {
     advanceLoading(0)
@@ -946,7 +930,7 @@ $(document).ready(function () {
     if ($('#new-character').val() == '') {
       $('.charcode').text('N/A')
     } else {
-      $('.charcode').text('0x' + $('#new-character').val().charCodeAt(0).toString(16).toUpperCase())
+      $('.charcode').text('0x' + $('#new-character').val().codePointAt(0).toString(16).toUpperCase())
     }
   })
 
@@ -954,7 +938,7 @@ $(document).ready(function () {
     if ($('#new-character-code').val() == '') {
       $('.character').text('N/A')
     } else {
-      $('.character').text(String.fromCharCode(parseInt($('#new-character-code').val(), 16)))
+      $('.character').text(charFromCodePoint(parseInt($('#new-character-code').val(), 16)))
     }
   })
   
@@ -962,7 +946,7 @@ $(document).ready(function () {
     if ($('#newfont-new-character').val() == '') {
       $('.newfontCharcode').text('N/A')
     } else {
-      $('.newfontCharcode').text('0x' + $('#newfont-new-character').val().charCodeAt(0).toString(16).toUpperCase())
+      $('.newfontCharcode').text('0x' + $('#newfont-new-character').val().codePointAt(0).toString(16).toUpperCase())
     }
   })
 
@@ -970,7 +954,7 @@ $(document).ready(function () {
     if ($('#newfont-new-character-code').val() == '') {
       $('.newfontCharacter').text('N/A')
     } else {
-      $('.newfontCharacter').text(String.fromCharCode(parseInt($('#newfont-new-character-code').val(), 16)))
+      $('.newfontCharacter').text(charFromCodePoint(parseInt($('#newfont-new-character-code').val(), 16)))
     }
   })
   
@@ -981,12 +965,12 @@ $(document).ready(function () {
     if ($('#newfont-new-character').val() == '') {
       $('.charcode').text('N/A')
     } else {
-      $('.charcode').text('0x' + $('#newfont-new-character').val().charCodeAt(0).toString(16).toUpperCase())
+      $('.charcode').text('0x' + $('#newfont-new-character').val().codePointAt(0).toString(16).toUpperCase())
     }
     if ($('#newfont-new-character-code').val() == '') {
       $('.character').text('N/A')
     } else {
-      $('.character').text(String.fromCharCode($('#newfont-new-character-code').val()))
+      $('.character').text(charFromCodePoint(parseInt($('#newfont-new-character-code').val(), 16)))
     }
     
     $('.ui.modal.newfont').modal({
@@ -1014,10 +998,10 @@ $(document).ready(function () {
         let newCharCode
         if ($('input[name=newfontCharcode]').is(':checked')) {
           newCharCode = parseInt($('#newfont-new-character-code').val(), 16)
-          newChar = String.fromCharCode(newCharCode)
+          newChar = charFromCodePoint(newCharCode)
         } else {
           newChar = $('#newfont-new-character').val()
-          newCharCode = $('#newfont-new-character').val().charCodeAt(0)
+          newCharCode = $('#newfont-new-character').val().codePointAt(0)
         }
 
         // Check character validity
@@ -1033,25 +1017,29 @@ $(document).ready(function () {
           return
         }
 
-        if (newCharCode > 65535) {
+        if (newCharCode > 0x10FFFF) {
           $('.ui.modal.message p').text('This character is out of range, I\'m not creating a new font with it.')
           $('.ui.modal.message').modal('show')
           return
         }
-        
+        newChar = charFromCodePoint(newCharCode)
+
         // Set the font parameters
-        window['first'] = newCharCode
-        window['last'] = newCharCode
-        window['name'] = name + '_'
-        window[name + '_Bitmaps'] = [] // This is otherwise created by the eval() in extract font
+        window['font'] = {
+          preamble: '',
+          bitmapsName: name + '_Bitmaps',
+          glyphsName: name + '_Glyphs',
+          fontName: name,
+          yAdvance: newfontHeight
+        }
         window['maxBaseline'] = newfontHeight
         window['maxH'] = newfontHeight
-        window['font_def'] = 'const GFXfont ' + name + ' PROGMEM = {(uint8_t *) ' + name + '_Bitmaps, (GFXglyph *)' + name + '_Glyphs, 0x00, 0x00, ' + newfontHeight + '};'
-        
+        window['glyph_table_width'] = 160
+
         // Show the data
         $('.fontname').text('(' + name + ')').show()
-        $('#firstglyph').val('0x' + window["first"].toString(16))
-        $('#lastglyph').val('0x' + window["last"].toString(16))
+        $('#firstglyph').val(hexCode(newCharCode))
+        $('#lastglyph').val(hexCode(newCharCode))
         $('#glyphs').empty()
 
         
@@ -1063,10 +1051,11 @@ $(document).ready(function () {
         $('#reset').prop("disabled", false)
         
         // Add the new character
-        const grid = makeGlyphItem (' ' , 1, 1, newChar, 4, 0, -newfontHeight, false)
+        const grid = makeGlyphItem ('00000000' , 1, 1, newChar, 4, 0, -newfontHeight, false)
         $('#glyphs').append(grid)
-        
+
         setGlyphTable(grid.find('.glyph'))
+        renderSegmentHeaders()
       }
     })
     .modal('show')
@@ -1079,29 +1068,27 @@ $(document).ready(function () {
     if ($('#new-character').val() == '') {
       $('.charcode').text('N/A')
     } else {
-      $('.charcode').text('0x' + $('#new-character').val().charCodeAt(0).toString(16).toUpperCase())
+      $('.charcode').text('0x' + $('#new-character').val().codePointAt(0).toString(16).toUpperCase())
     }
     if ($('#new-character-code').val() == '') {
       $('.character').text('N/A')
     } else {
-      $('.character').text(String.fromCharCode($('#new-character-code').val()))
+      $('.character').text(charFromCodePoint(parseInt($('#new-character-code').val(), 16)))
     }
     
     // Choose a character
     $('.ui.modal.choose').modal({
       closable: false,
       onApprove: function() {
-        const firstglyph = parseInt($('#firstglyph').val(), 16)
-        const lastglyph = parseInt($('#lastglyph').val(), 16)
-
         let newChar
         let newCharCode
         if ($('input[name=charcode]').is(':checked')) {
           newCharCode = parseInt($('#new-character-code').val(), 16)
-          newChar = String.fromCharCode(newCharCode)
+          newChar = charFromCodePoint(newCharCode)
         } else {
           newChar = $('#new-character').val()
-          newCharCode = $('#new-character').val().charCodeAt(0)
+          newCharCode = $('#new-character').val().codePointAt(0)
+          newChar = charFromCodePoint(newCharCode)
         }
 
         if (newChar == '') {
@@ -1116,47 +1103,49 @@ $(document).ready(function () {
           return
         }
 
-        if (newCharCode > 127) {
+        if (newCharCode > 0x10FFFF) {
           $('.ui.modal.message p').text('This character is out of range, I\'m not adding it.')
           $('.ui.modal.message').modal('show')
           return
         }
 
         // Check that the character is not already existing
-        if (newCharCode > lastglyph || newCharCode < firstglyph) {
-          let start, end;
-          if (newCharCode > lastglyph) {
-            start = lastglyph + 1
-            end = newCharCode
-            window['last'] = '0x' + newCharCode.toString(16).toUpperCase()
-            $('#lastglyph').val(window['last'])
-          } else {
-            start = newCharCode
-            end = firstglyph - 1
-            window['first'] = '0x' + newCharCode.toString(16).toUpperCase()
-            $('#firstglyph').val(window['first'])
-          }
-          
-          if (newCharCode < firstglyph) {
-            for (j = end; j >= start; j--) {
-              const char = String.fromCharCode(parseInt(j))
-              const grid = makeGlyphItem (' ', 1, 1, char, 4, 0, -window['maxBaseline'], !(j === newCharCode))
-              $('#glyphs').prepend(grid)
-              setGlyphTable(grid.find('.glyph'))
-            }
-          } else {
-            for (j = start; j <= end; j++) {
-              const char = String.fromCharCode(parseInt(j))
-              const grid = makeGlyphItem (' ', 1, 1, char, 4, 0, -window['maxBaseline'], !(j === newCharCode))
-              $('#glyphs').append(grid)
-              setGlyphTable(grid.find('.glyph'))
-            }
-          }
-          
-        } else {
-          $('.ui.modal.message p').text('This character is already present in the actual set, I\'m not adding it.')
-          $('.ui.modal.message').modal('show')
+        const codePoints = glyphItems().toArray().map(glyphCodePoint)
+        if (codePoints.includes(newCharCode)) {
+          showMessage('This character is already present in the actual set, I\'m not adding it.')
+          return
         }
+
+        // Optionally fill the gap to the nearest existing glyph with disabled glyphs,
+        // otherwise the character starts a new segment (or joins an adjacent one)
+        let start = newCharCode
+        let end = newCharCode
+        let gapNote = ''
+        const below = codePoints.filter(cp => cp < newCharCode)
+        const above = codePoints.filter(cp => cp > newCharCode)
+        const nearestBelow = below.length ? Math.max(...below) : null
+        const nearestAbove = above.length ? Math.min(...above) : null
+        const gapBelow = nearestBelow === null ? Infinity : newCharCode - nearestBelow - 1
+        const gapAbove = nearestAbove === null ? Infinity : nearestAbove - newCharCode - 1
+        const gap = Math.min(gapBelow, gapAbove)
+        if ($('input[name=fillgap]').is(':checked') && gap > 0 && gap !== Infinity) {
+          if (gap > MAX_FILLED_GAP) {
+            gapNote = 'The gap to the nearest character is ' + gap + ' characters (more than ' + MAX_FILLED_GAP + '), so it was not filled; the character starts a new segment.'
+          } else if (gapBelow <= gapAbove) {
+            start = nearestBelow + 1
+          } else {
+            end = nearestAbove - 1
+          }
+        }
+
+        for (let j = start; j <= end; j++) {
+          const grid = makeGlyphItem ('00000000', 1, 1, charFromCodePoint(j), 4, 0, -window['maxBaseline'], j !== newCharCode)
+          insertGlyphItem(grid, j)
+          setGlyphTable(grid.find('.glyph'))
+        }
+        renderSegmentHeaders()
+        updateRangeInputs()
+        if (gapNote) showMessage(gapNote)
       }
     })
     .modal('show');
@@ -1164,117 +1153,35 @@ $(document).ready(function () {
   })
 
   $('#export').click(function () {
-    const glyphs = []
-    const bitsArray = []
-    let offset = 0
     const firstglyph = parseInt($('#firstglyph').val(), 16)
     const lastglyph = parseInt($('#lastglyph').val(), 16)
+    if (isNaN(firstglyph) || isNaN(lastglyph)) {
+      showMessage('The export range is not a valid hex code, I\'m not exporting.')
+      return
+    }
 
+    const glyphs = []
     $('.table.glyph').each(function () {
       const t = $(this)
-      // Ignore glyphs outside of requested range
-      if (t.attr('data-char').charCodeAt(0) < firstglyph || t.attr('data-char').charCodeAt(0) > lastglyph) {
-        return
-      }
-
-      var dataPixels = $(this).attr('data-pixels')
-      if (t.attr('data-dis') == 1) {
-        dataPixels = ''
-      }
-      let bits = ''
-
-      for (let i = 0; i < dataPixels.length; i++) {
-        bits += dataPixels.charAt(i)
-        // Each 8 bits, we form the HEX value
-        if (bits.length == 8) {
-          bitsArray.push('0x' + ('00' + parseInt((bits + '00000000').slice(0, 8), 2).toString(16).toUpperCase()).slice(-2))
-          bits = ''
-        }
-      }
-
-      // Remaining bits with padding then, if necessary
-      if (bits != '') {
-        bitsArray.push('0x' + ('00' + parseInt((bits + '00000000').slice(0, 8), 2).toString(16).toUpperCase()).slice(-2))
-      }
-
-      // Set data width/height to 0 for disabled glyphs
-      const w = parseInt(t.attr('data-w')) * (1 - parseInt(t.attr('data-dis')))
-      const h = parseInt(t.attr('data-h')) * (1 - parseInt(t.attr('data-dis')))
-
-      let char = t.attr('data-char')
-      const charCode = char.charCodeAt(0).toString(16).toUpperCase()
-      const charDisplay = char.replace(/[\x00-\x1F\x7F-\x9F\xAD]/g, 'non-printable')
-      const comment = '// 0x' + charCode + ' \'' + charDisplay + '\''
-      
-      if (t.attr('data-dis') == 0) {
-        glyphs.push(
-          '  { ' +
-          ('     ' + offset).slice(-5) + ', ' +
-          ('   ' + w).slice(-3) + ', ' +
-          ('   ' + h).slice(-3) + ', ' +
-          ('   ' + parseInt(t.attr('data-adv'))).slice(-3) + ', ' +
-          ('    ' + parseInt(t.attr('data-ow'))).slice(-4) + ', ' +
-          ('    ' + parseInt(t.attr('data-oh'))).slice(-4) + ' },   ' +
-          comment)
-      } else {
-        glyphs.push(
-          '  { ' +
-          '    0, ' +
-          '  0, ' +
-          '  0, ' +
-          '  0, ' +
-          '   0, ' +
-          '   0 },   ' +
-          comment)
-      }
-      
-      offset = bitsArray.length
+      glyphs.push({
+        cp: parseInt(t.attr('data-cp')),
+        w: parseInt(t.attr('data-w')),
+        h: parseInt(t.attr('data-h')),
+        adv: parseInt(t.attr('data-adv')),
+        xo: parseInt(t.attr('data-ow')),
+        yo: parseInt(t.attr('data-oh')),
+        pixels: t.attr('data-pixels'),
+        disabled: t.attr('data-dis') == 1
+      })
     })
 
-    // Bitmaps
-    let bitmapsOutput = 'const uint8_t ' + name + 'Bitmaps[] PROGMEM = {\n'
-    // We want to join per 12 words
-    const limit = Math.floor(bitsArray.length / 12)
-    for (let nb = 0; nb < limit; nb++) {
-      const isLastLine = (limit * 12 === bitsArray.length) && (nb === limit - 1)
-
-      bitmapsOutput += '  ' + bitsArray[nb * 12] + ', ' +
-                              bitsArray[nb * 12 + 1] + ', ' +
-                              bitsArray[nb * 12 + 2] + ', ' +
-                              bitsArray[nb * 12 + 3] + ', ' +
-                              bitsArray[nb * 12 + 4] + ', ' +
-                              bitsArray[nb * 12 + 5] + ', ' +
-                              bitsArray[nb * 12 + 6] + ', ' +
-                              bitsArray[nb * 12 + 7] + ', ' +
-                              bitsArray[nb * 12 + 8] + ', ' +
-                              bitsArray[nb * 12 + 9] + ', ' +
-                              bitsArray[nb * 12 + 10] + ', ' +
-                              bitsArray[nb * 12 + 11] + (isLastLine ? '' : ',') + ' \n'
+    try {
+      const result = GfxFont.buildFont(Object.assign({}, window['font'], { glyphs: glyphs }), { first: firstglyph, last: lastglyph })
+      $('#result').val(result.source)
+      $('#exportFormat').text(result.format + ', ' + result.bitmapBytes + ' bitmap bytes')
+    } catch (e) {
+      showMessage(e.message)
     }
-
-    if (limit * 12 !== bitsArray.length) {
-      bitmapsOutput += '  ' + bitsArray.slice(-(bitsArray.length - limit * 12)).join(', ') + '\n'
-    }
-    bitmapsOutput += '};\n\n'
-
-    // Glyphs
-    // The last glyph has a ',' too much at the end, we need to remove it (it's easier than to avoid putting it in the first place)
-    glyphs[glyphs.length - 1] = glyphs[glyphs.length - 1].replace('},', '} ')
-    let glyphsOutput = 'const GFXglyph ' + name + 'Glyphs[] PROGMEM = {\n'
-    glyphsOutput += glyphs.join('\n') + '\n};\n\n'
-
-    // Create a new font_def with the updated first & last glyph values in it
-    let parts = window['font_def'].split(',')
-    parts[2] = '0x' + firstglyph.toString(16).toUpperCase()
-    parts[3] = '0x' + lastglyph.toString(16).toUpperCase()
-    const updated_font_def = parts.join(", ",parts)
-
-    data = bitmapsOutput + glyphsOutput + updated_font_def
-
-    // Add back the font preamble, if present
-    data = (window.font_preamble ?? '') + data
-
-    $('#result').val(data)
   })
 })
 

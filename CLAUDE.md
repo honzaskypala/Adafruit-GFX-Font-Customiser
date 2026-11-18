@@ -9,22 +9,29 @@ branch `master`, published on GitHub Pages.
 ## General
 
 - The local developer setup is in `CLAUDE.local.md` (gitignored) when it exists.
-- Keep the upstream style: the whole app is `index.html`, 2-space indent, jQuery 3.7.1 + Semantic UI 2.4.2 from CDN,
+- Keep the upstream style: UI in `index.html`, 2-space indent, jQuery 3.7.1 + Semantic UI 2.4.2 from CDN,
   no build step. Keep `LICENSE` and the upstream credits in `README.md`.
+- `gfxfont.js`: DOM-free font model, parser and generator (`GfxFont.parseFont`, `GfxFont.buildFont`,
+  `segmentsOf`); loaded by `index.html` and by the Node test. Font logic goes here, UI stays in `index.html`.
 - Run locally: `python3 -m http.server` in the repo root, open `http://localhost:8000/`.
-- Test fonts: `test/*.h` (upstream, fontconvert output). bcp-clock's `lib/gfx/f3x5.h` (segmented, packed) and
-  `lib/gfx/f4x6.h` (plain `GFXfont`) are the reference fonts for the new formats.
+- Test: `node test/roundtrip.js` (round trip of every `test/*.h` + format selection).
+- Test fonts: `test/*.h`: upstream fontconvert output, plus bcp-clock's `f3x5.h` (segmented, packed; its second
+  font `F3x5_Fixed` removed) and `f4x6.h` (plain `GFXfont`) as references for the new formats.
 
-## Architecture of `index.html` (upstream)
+## Architecture of `index.html`
 
-- State lives in the DOM: each glyph is a `.table.glyph` with `data-char`, `data-pixels` (string of `0`/`1`),
-  `data-w`, `data-h`, `data-adv`, `data-ow`, `data-oh`, `data-dis`; font-level values are globals on `window`
-  (`name`, `first`, `last`, `font_def`, `font_preamble`, `maxH`, `maxBaseline`).
-- `extractFont()` imports: regexes find `const uint8_t <name>Bitmaps[]` and `const GFXfont…`, the rest is turned
-  into JS (`{}`→`[]`) and `eval`ed. Glyph bitmap length = next glyph offset − own offset.
-- `#add` extends `first`/`last` and fills the gap with disabled glyphs; `#export` writes sequential hex bitmaps,
-  the glyph table and the old `GFXfont` text with `first`/`last` patched.
-- Characters use `String.fromCharCode`/`charCodeAt` (BMP only).
+- State lives in the DOM: each glyph is a `.table.glyph` with `data-cp` (code point), `data-char`, `data-pixels`
+  (string of `0`/`1`), `data-w`, `data-h`, `data-adv`, `data-ow`, `data-oh`, `data-dis`, inside a wrapper `div`
+  in `#glyphs`, sorted by code point. Font-level values: `window.font` (`preamble`, `bitmapsName`, `glyphsName`,
+  `fontName`, `yAdvance`), display globals `maxH`, `maxBaseline`, `glyph_table_width`.
+- Segments are not stored: a segment is a run of consecutive code points. `renderSegmentHeaders()` inserts an
+  `h3.segment-header` before each run; call it after adding glyphs.
+- `extractFont()` → `GfxFont.parseFont`; `#export` collects the DOM glyphs → `GfxFont.buildFont`.
+- `#add` inserts the glyph at its place (`insertGlyphItem`); with "Fill the gap" it fills the gap to the nearest
+  glyph with disabled glyphs (max `MAX_FILLED_GAP` = 256), otherwise the glyph starts or joins a segment.
+- Characters use `codePointAt`/`charFromCodePoint` (full Unicode).
+- Upstream behaviour changed by the fork: the font struct is regenerated (text after it, e.g. fontconvert's
+  `// Approx. N bytes`, is dropped); only one font per file is imported (others reported as a warning).
 
 ## Target formats
 
@@ -43,7 +50,7 @@ branch `master`, published on GitHub Pages.
 
 ## Roadmap
 
-Phase 1
+Phase 1 (done)
 1. Parser: replace regex+`eval` with a tokenizer for the C subset (dec/hex/`0b` numbers, comments, casts, `&X[n]`,
    `nullptr`, `GFXfont` and `UTF8_32BitFont[]`) producing an explicit model
    `{ name, segments: [{ first, last, glyphs: [{ cp, w, h, adv, xo, yo, pixels, disabled }] }] }`.
@@ -51,7 +58,7 @@ Phase 1
 2. Read each glyph bitmap as `ceil(w*h/8)` bytes from its offset.
 3. Code points everywhere: `codePointAt`/`String.fromCodePoint`.
 4. UI: glyphs grouped by segment with a header; adding a glyph joins an adjacent segment or creates a new one
-   (no 900 disabled filler glyphs); delete empty segments; segments kept sorted.
+   (no 900 disabled filler glyphs); segments kept sorted.
 5. Export picks the format automatically (plain `GFXfont` if it fits, else segmented).
 
 Phase 2
@@ -65,7 +72,8 @@ font must get its own bitmap array before its file is re-exported.
 
 ## Verification
 
-- Round trip (Node, to be added as `test/roundtrip.js`): parse → export → parse for `test/*.h` and the bcp-clock
-  fonts; per code point `w,h,adv,xo,yo` and pixels must match, with packing on and off. Packed F3x5 ≤ 637 B.
+- Round trip `node test/roundtrip.js`: parse → export → parse for every `test/*.h`; per code point
+  `w,h,adv,xo,yo` and pixels must match and a second export must be identical. Phase 2: also with packing on,
+  packed F3x5 ≤ 637 B (sequential export: 1123 B).
 - Browser: load a font, edit a glyph, add a glyph inside and outside existing segments, export.
 - In bcp-clock: drop in the exported font, build and run its device test `test_gfx` (see its CLAUDE.md).
