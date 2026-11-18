@@ -5,6 +5,8 @@
 A browser-based pixel editor for [Adafruit_GFX](https://github.com/adafruit/Adafruit-GFX-Library) bitmap fonts.
 Paste the content of a `.h` font file, edit the glyphs pixel by pixel, and export an improved `.h` file.
 
+**Use it online: <https://honzaskypala.github.io/Adafruit-GFX-Font-Customiser/>**
+
 This is a fork of [tchapi/Adafruit-GFX-Font-Customiser](https://github.com/tchapi/Adafruit-GFX-Font-Customiser)
 that adds **segmented fonts with Unicode characters (UTF-8 extension)** and **bitmap packing** for smaller fonts.
 It was created to draw the fonts of [bcp-clock](https://github.com/honzaskypala/bcp-clock), a tournament clock
@@ -33,7 +35,8 @@ Added by this fork:
 
 ## Usage
 
-1. Open the editor (see [Running locally](#running-locally)).
+1. Open the editor [online](https://honzaskypala.github.io/Adafruit-GFX-Font-Customiser/) or locally
+   (see [Running locally](#running-locally)).
 2. Paste the content of a `.h` font file into *Extract font from source* and click **Extract**,
    or click **Create a new font**.
 3. Edit the glyphs. Glyphs are grouped by segment.

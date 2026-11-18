@@ -4,7 +4,8 @@ Fork of [tchapi/Adafruit-GFX-Font-Customiser](https://github.com/tchapi/Adafruit
 remote `upstream`), a web editor for Adafruit_GFX bitmap fonts. The fork adds support for the **segmented UTF-8
 fonts** used by [bcp-clock](https://github.com/honzaskypala/bcp-clock) (Ulanzi TC001/TC002 clock firmware), so
 fonts can be drawn pixel by pixel instead of by hand. Remote `origin` = `honzaskypala/Adafruit-GFX-Font-Customiser`,
-branch `master`, published on GitHub Pages.
+branch `master`, published on GitHub Pages from `master` / root: <https://honzaskypala.github.io/Adafruit-GFX-Font-Customiser/>
+(every push to `master` redeploys it).
 
 ## General
 
