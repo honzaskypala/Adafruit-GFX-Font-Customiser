@@ -13,8 +13,11 @@ branch `master`, published on GitHub Pages.
   no build step. Keep `LICENSE` and the upstream credits in `README.md`.
 - `gfxfont.js`: DOM-free font model, parser and generator (`GfxFont.parseFont`, `GfxFont.buildFont`,
   `segmentsOf`); loaded by `index.html` and by the Node test. Font logic goes here, UI stays in `index.html`.
-- Run locally: `python3 -m http.server` in the repo root, open `http://localhost:8000/`.
+- Run locally: open `index.html` directly (`file://` works, the page fetches nothing itself). Browser tests that
+  `fetch('/test/…')` fonts need `python3 -m http.server 8000` in the repo root.
 - Test: `node test/roundtrip.js` (round trip of every `test/*.h` + format selection).
+- `docs/images/*.png`: README screenshots of `test/f3x5.h` (device scale 2, headless Chrome; glyphs at 1600 px
+  page width = 8 glyphs per row, export panel at 1280 px).
 - Test fonts: `test/*.h`: upstream fontconvert output, plus bcp-clock's `f3x5.h` (segmented, packed; its second
   font `F3x5_Fixed` removed) and `f4x6.h` (plain `GFXfont`) as references for the new formats.
 
