@@ -30,7 +30,12 @@ for (const f of fonts) {
     checkSame(model, again, f)
     // A second build must be byte identical (stable output)
     assert.strictEqual(G.buildFont(again).source, built.source, f + ': stable output')
-    console.log('ok  ', f, model.glyphs.length + ' glyphs', built.format, built.bitmapBytes + ' B')
+    // Packed bitmaps: same glyphs, never larger than sequential
+    const packed = G.buildFont(model, null, { pack: true })
+    checkSame(model, G.parseFont(packed.source), f + ' (packed)')
+    assert.ok(packed.bitmapBytes <= built.bitmapBytes, f + ': packed larger than sequential')
+    if (f === 'f3x5.h') assert.ok(packed.bitmapBytes <= 637, f + ': packed ' + packed.bitmapBytes + ' B > 637 B')
+    console.log('ok  ', f, model.glyphs.length + ' glyphs', built.format, built.bitmapBytes + ' B, packed ' + packed.bitmapBytes + ' B')
   } catch (e) {
     failed++
     console.log('FAIL', f, e.message)

@@ -250,18 +250,121 @@
     return '// ' + hex(cp) + ' ' + display
   }
 
+  // Bitmap bytes of a glyph (w*h bits, last byte padded with zeros)
+  function glyphBytes (g) {
+    const n = g.w * g.h
+    const bits = (g.pixels.slice(0, n) + '0'.repeat(8)).slice(0, Math.ceil(n / 8) * 8)
+    const bytes = []
+    for (let k = 0; k < bits.length; k += 8) bytes.push(parseInt(bits.slice(k, k + 8), 2))
+    return bytes
+  }
+
   // Sequential bitmaps; returns { bytes, offsets } (offset per glyph, 0 for disabled)
   function layoutBitmaps (glyphs) {
     const bytes = []
     const offsets = glyphs.map(g => {
       if (g.disabled) return 0
       const offset = bytes.length
-      const n = g.w * g.h
-      const bits = (g.pixels.slice(0, n) + '0'.repeat(8)).slice(0, Math.ceil(n / 8) * 8)
-      for (let k = 0; k < bits.length; k += 8) bytes.push(parseInt(bits.slice(k, k + 8), 2))
+      bytes.push(...glyphBytes(g))
       return offset
     })
     return { bytes, offsets }
+  }
+
+  // ---- Bitmap packing ----
+  // Glyphs may share bytes of the bitmap array: a glyph reads ceil(w*h/8) bytes from its offset and only its
+  // w*h bits matter (padding bits of its last byte are don't-care). Greedy, one glyph per step:
+  //   1. a glyph already contained in the bitmap is placed there (widest first),
+  //   2. a glyph whose end matches the start of the bitmap is prepended with the overlap (largest overlap),
+  //   3. a glyph whose start matches the end of the bitmap is appended with the overlap (largest overlap),
+  //   4. otherwise the largest remaining glyph (w*h) is appended.
+  // Port of the generator used for bcp-clock's F3x5 font.
+
+  // Does item (bytes + mask of its last byte) match out[pos ...] in bytes [from, to)?
+  function matchesAt (item, out, pos, from, to) {
+    for (let k = from; k < to; k++) {
+      const o = out[pos + k]
+      if (o === undefined) return false
+      const mask = k === item.bytes.length - 1 ? item.lastMask : 0xFF
+      if ((o & mask) !== (item.bytes[k] & mask)) return false
+    }
+    return true
+  }
+
+  function packBitmaps (glyphs) {
+    const offsets = glyphs.map(() => 0)
+    const items = []
+    glyphs.forEach((g, index) => {
+      const n = g.w * g.h
+      if (g.disabled || n === 0) return // no bitmap data, offset 0
+      const rest = n % 8
+      items.push({ index, bits: n, w: g.w, bytes: glyphBytes(g), lastMask: rest ? (0xFF << (8 - rest)) & 0xFF : 0xFF })
+    })
+
+    let out = []
+    let pending = items.slice()
+    const placed = [] // { item, offset } – offsets shift when bytes are prepended
+    const place = (item, offset) => { placed.push({ item, offset }); pending = pending.filter(x => x !== item) }
+
+    while (pending.length) {
+      // 1. Already contained in the bitmap
+      let best = null
+      for (const item of pending) {
+        for (let pos = 0; pos + item.bytes.length <= out.length; pos++) {
+          if (matchesAt(item, out, pos, 0, item.bytes.length)) {
+            if (!best || item.w > best.item.w) best = { item, pos }
+            break
+          }
+        }
+      }
+      if (best) { place(best.item, best.pos); continue }
+
+      // 2. Glyph end overlaps the start of the bitmap: prepend the rest
+      best = null
+      for (const item of pending) {
+        const len = item.bytes.length
+        for (let overlap = Math.min(len - 1, out.length); overlap > 0; overlap--) {
+          if (matchesAt(item, out, overlap - len, len - overlap, len)) {
+            if (!best || overlap > best.overlap) best = { item, overlap }
+            break
+          }
+        }
+      }
+      if (best) {
+        const head = best.item.bytes.slice(0, best.item.bytes.length - best.overlap)
+        out = head.concat(out)
+        placed.forEach(p => { p.offset += head.length })
+        place(best.item, 0)
+        continue
+      }
+
+      // 3. Glyph start overlaps the end of the bitmap: append the rest
+      best = null
+      for (const item of pending) {
+        const len = item.bytes.length
+        for (let overlap = Math.min(len - 1, out.length); overlap > 0; overlap--) {
+          if (matchesAt(item, out, out.length - overlap, 0, overlap)) {
+            if (!best || overlap > best.overlap) best = { item, overlap }
+            break
+          }
+        }
+      }
+      if (best) {
+        const pos = out.length - best.overlap
+        out = out.concat(best.item.bytes.slice(best.overlap))
+        place(best.item, pos)
+        continue
+      }
+
+      // 4. Append the largest remaining glyph
+      const largest = pending.reduce((a, b) => (b.bits > a.bits ? b : a))
+      const pos = out.length
+      out = out.concat(largest.bytes)
+      place(largest, pos)
+    }
+
+    placed.forEach(p => { offsets[p.item.index] = p.offset })
+    return { bytes: out, offsets }
   }
 
   function glyphRow (g, offset, pad) {
@@ -313,12 +416,13 @@
     return out
   }
 
-  // Generates the .h source; glyphs outside [first, last] are left out. Returns { source, format }.
-  function buildFont (font, range) {
+  // Generates the .h source; glyphs outside [first, last] are left out; options.pack packs the bitmaps.
+  // Returns { source, format, bitmapBytes }.
+  function buildFont (font, range, options) {
     let glyphs = font.glyphs.slice().sort((a, b) => a.cp - b.cp)
     if (range) glyphs = glyphs.filter(g => g.cp >= range.first && g.cp <= range.last)
     if (glyphs.length === 0) throw new Error('No glyphs to export.')
-    const layout = layoutBitmaps(glyphs)
+    const layout = options && options.pack ? packBitmaps(glyphs) : layoutBitmaps(glyphs)
     const plain = isPlainFont(glyphs)
     let preamble = font.preamble || ''
     if (!plain && !/utf832bitfont\.h/.test(preamble)) {

@@ -61,7 +61,7 @@ Phase 1 (done)
    (no 900 disabled filler glyphs); segments kept sorted.
 5. Export picks the format automatically (plain `GFXfont` if it fits, else segmented).
 
-Phase 2
+Phase 2 (done; `packBitmaps` in `gfxfont.js`, F3x5: 1123 B → 607 B)
 6. Checkbox "Pack bitmaps (overlap)" in the export panel: dedupe identical bitmaps, then greedy byte-level
    overlap, for both formats. JavaScript port of the author's earlier Python generator (bcp-clock history,
    `git show e7963fa^:lib/gfx/f3x5.py`: `find_widest`, `find_widest_already_in_bitmap`, `find_starting_with`,
@@ -73,7 +73,7 @@ font must get its own bitmap array before its file is re-exported.
 ## Verification
 
 - Round trip `node test/roundtrip.js`: parse → export → parse for every `test/*.h`; per code point
-  `w,h,adv,xo,yo` and pixels must match and a second export must be identical. Phase 2: also with packing on,
-  packed F3x5 ≤ 637 B (sequential export: 1123 B).
+  `w,h,adv,xo,yo` and pixels must match and a second export must be identical; the same with packing on,
+  packed never larger than sequential, packed F3x5 ≤ 637 B (the old Python generator's result).
 - Browser: load a font, edit a glyph, add a glyph inside and outside existing segments, export.
 - In bcp-clock: drop in the exported font, build and run its device test `test_gfx` (see its CLAUDE.md).

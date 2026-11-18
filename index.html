@@ -156,7 +156,7 @@
   <h1 class="ui header">Adafruit GFX Pixel font customiser</h1>
   <p>
     <em>Created by <a href="https://github.com/tchapi">tchapi</a>, major improvements by <a href="https://github.com/cmarrin">cmarrin</a> and <a href="https://github.com/charno">charno</a> - Source code available on <a href="https://github.com/tchapi/Adafruit-GFX-Font-Customiser">Github</a>.</em><br>
-    <em>Fork by <a href="https://github.com/honzaskypala">honza.skypala</a>, support for segmented fonts and for UTF8 extension.</em>
+    <em>Fork by <a href="https://github.com/honzaskypala">honza.skypala</a>, support for packing fonts, segmented fonts and UTF8 extension.</em>
   </p>
 
   <div class="ui divider"></div>
@@ -295,6 +295,12 @@
               <input type="text" id="lastglyph" value="0x00" />
             </div>
           </div>
+          <div class="field">
+            <div class="ui toggle checkbox pack-bitmaps">
+              <input type="checkbox" name="packbitmaps" tabindex="0" class="hidden" checked="checked">
+              <label>Pack bitmaps (glyphs share overlapping bytes, smaller file size)</label>
+            </div>
+          </div>
           <button class="ui button green" id="export" disabled="disabled"><i class="icon download"></i> Process and create file</button>
           <span id="exportFormat" class="np"></span>
         </div>
@@ -330,7 +336,7 @@
           <li>Edit all values present in the GFXglyph data structure (See <a href="https://learn.adafruit.com/creating-custom-symbol-font-for-adafruit-gfx-library/understanding-the-font-specification">Adafruit documentation</a> for more information)</li>
         </ul>
         <h5>When exporting:</h5>
-        <p>The format is chosen automatically: a plain <kbd>GFXfont</kbd> when the characters form one range within 0x00–0xFF, otherwise a segmented <kbd>UTF8_32BitFont[]</kbd> (one segment per range of consecutive characters). You can either:</p>
+        <p>The format is chosen automatically: a plain <kbd>GFXfont</kbd> when the characters form one range within 0x00–0xFF, otherwise a segmented <kbd>UTF8_32BitFont[]</kbd> (one segment per range of consecutive characters). <em>Pack bitmaps</em> lets glyphs share overlapping bytes of the bitmap array (identical glyphs stored once), which makes the font smaller; offsets in the glyph table are then no longer in order. You can either:</p>
         <ul>
           <li>Select a range of characters to include in the output. Characters outside of this range will <strong>not</strong> be included in the bitmap nor in the glyphs table.</li>
           <li>Disable individual characters. The disabled characters get all values set to <kbd>0</kbd>. There still are entries for the disabled characters in the glyphs table, but no data in the bitmap for them — this keeps the characters in their correct places in the ASCII table.</li>
@@ -707,6 +713,7 @@ $(document).ready(function () {
   $('#reset').prop("disabled", 'disabled')
   $('.ui.checkbox.use-charcode').checkbox()
   $('.ui.checkbox.fill-gap').checkbox()
+  $('.ui.checkbox.pack-bitmaps').checkbox()
 
   $(document).on('change', '.ui.checkbox.use-charcode input', function (e) {
     $('#new-character').parent().toggle()
@@ -1176,7 +1183,7 @@ $(document).ready(function () {
     })
 
     try {
-      const result = GfxFont.buildFont(Object.assign({}, window['font'], { glyphs: glyphs }), { first: firstglyph, last: lastglyph })
+      const result = GfxFont.buildFont(Object.assign({}, window['font'], { glyphs: glyphs }), { first: firstglyph, last: lastglyph }, { pack: $('input[name=packbitmaps]').is(':checked') })
       $('#result').val(result.source)
       $('#exportFormat').text(result.format + ', ' + result.bitmapBytes + ' bitmap bytes')
     } catch (e) {
